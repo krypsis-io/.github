@@ -66,7 +66,7 @@ jobs:
           go-version-file: ${{ inputs.go-version-file }}
 
       - name: Generate SBOM (CycloneDX)
-        if: inputs.generate-sbom
+        if: inputs.generate-sbom && github.event.repository.visibility == 'public'
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
@@ -75,7 +75,7 @@ jobs:
           output: sbom.cdx.json
 
       - name: Submit SBOM to dependency graph
-        if: inputs.generate-sbom
+        if: inputs.generate-sbom && github.event.repository.visibility == 'public'
         uses: anchore/sbom-action@v0
         with:
           path: .
@@ -84,11 +84,26 @@ jobs:
       - name: Install semantic-release
         run: npm install -g semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec
 
+      - name: Get latest tag before release
+        id: before
+        run: |
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Semantic Release
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+        run: |
+          npx semantic-release
+          git fetch --tags
+          NEW_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          if [ "$NEW_TAG" != "${{ steps.before.outputs.tag }}" ]; then
+            echo "new_release_published=true" >> "$GITHUB_OUTPUT"
+            echo "new_release_version=${NEW_TAG#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "new_release_published=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set build vars
         if: steps.detect-go.outputs.is-go == 'true' && steps.semantic.outputs.new_release_published == 'true'
