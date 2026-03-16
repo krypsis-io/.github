@@ -68,9 +68,11 @@ jobs:
 
       - name: Setup Go
         if: steps.detect-go.outputs.is-go == 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: ${{ inputs.go-version-file }}
+          cache-dependency-path: |
+            **/go.sum
 
       - name: Generate SBOM (CycloneDX)
         if: inputs.generate-sbom && github.event.repository.visibility == 'public'
@@ -83,7 +85,7 @@ jobs:
 
       - name: Submit SBOM to dependency graph
         if: inputs.generate-sbom && github.event.repository.visibility == 'public'
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@v0.23.1
         with:
           path: .
           dependency-snapshot: true
