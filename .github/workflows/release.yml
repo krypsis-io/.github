@@ -62,6 +62,11 @@ jobs:
           if [ -f "${{ inputs.go-version-file }}" ]; then
             echo "is-go=true" >> "$GITHUB_OUTPUT"
             echo "Go project detected"
+            if [ -f "go.sum" ]; then
+              echo "has-go-sum=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has-go-sum=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "is-go=false" >> "$GITHUB_OUTPUT"
           fi
@@ -71,8 +76,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: ${{ inputs.go-version-file }}
-          cache-dependency-path: |
-            **/go.sum
+          cache: ${{ steps.detect-go.outputs.has-go-sum == 'true' }}
 
       - name: Generate SBOM (CycloneDX)
         if: inputs.generate-sbom && github.event.repository.visibility == 'public'
