@@ -1,0 +1,130 @@
+name: Container Build
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Container image name (defaults to repo name)"
+        type: string
+        default: ""
+      registry:
+        description: "Container registry"
+        type: string
+        default: "ghcr.io"
+      dockerfile:
+        description: "Path to Dockerfile/Containerfile"
+        type: string
+        default: "Dockerfile"
+      context:
+        description: "Build context path"
+        type: string
+        default: "."
+      platforms:
+        description: "Comma-separated platforms to build"
+        type: string
+        default: "linux/amd64,linux/arm64"
+      build-args:
+        description: "Newline-separated build args (KEY=VALUE)"
+        type: string
+        default: ""
+      tag-suffix:
+        description: "Optional suffix appended to all tags"
+        type: string
+        default: ""
+    secrets:
+      REGISTRY_USERNAME:
+        required: false
+        description: "Registry username (defaults to github.actor for GHCR)"
+      REGISTRY_PASSWORD:
+        required: false
+        description: "Registry password (defaults to GITHUB_TOKEN for GHCR)"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          REGISTRY="${{ inputs.registry }}"
+          IMAGE="${{ inputs.image-name }}"
+          if [ -z "$IMAGE" ]; then
+            IMAGE="${GITHUB_REPOSITORY,,}"
+          fi
+          FULL_IMAGE="${REGISTRY}/${IMAGE}"
+          echo "image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
+
+          TAGS=""
+          SUFFIX="${{ inputs.tag-suffix }}"
+
+          # Tag with version if this is a tag push
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            TAGS="${FULL_IMAGE}:${VERSION}${SUFFIX}"
+            TAGS="${TAGS} ${FULL_IMAGE}:latest${SUFFIX}"
+          else
+            SHA="${GITHUB_SHA::8}"
+            TAGS="${FULL_IMAGE}:sha-${SHA}${SUFFIX}"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Login to registry
+        run: |
+          USERNAME="${{ secrets.REGISTRY_USERNAME }}"
+          PASSWORD="${{ secrets.REGISTRY_PASSWORD }}"
+          if [ -z "$USERNAME" ]; then USERNAME="${{ github.actor }}"; fi
+          if [ -z "$PASSWORD" ]; then PASSWORD="${{ secrets.GITHUB_TOKEN }}"; fi
+          echo "$PASSWORD" | buildah login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
+
+      - name: Build and push (multi-arch)
+        run: |
+          IFS=',' read -ra PLATFORMS <<< "${{ inputs.platforms }}"
+          MANIFEST="${{ steps.meta.outputs.image }}:manifest-$$"
+
+          # Build per-platform images
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            PLATFORM=$(echo "$PLATFORM" | xargs)
+            OS="${PLATFORM%%/*}"
+            ARCH="${PLATFORM##*/}"
+            echo "Building for ${OS}/${ARCH}..."
+
+            BUILD_CMD="buildah build \
+              --platform ${PLATFORM} \
+              --format oci \
+              -f ${{ inputs.dockerfile }} \
+              -t ${MANIFEST}-${ARCH}"
+
+            # Add build args
+            BUILD_ARGS="${{ inputs.build-args }}"
+            if [ -n "$BUILD_ARGS" ]; then
+              while IFS= read -r arg; do
+                [ -n "$arg" ] && BUILD_CMD="$BUILD_CMD --build-arg $arg"
+              done <<< "$BUILD_ARGS"
+            fi
+
+            BUILD_CMD="$BUILD_CMD ${{ inputs.context }}"
+            eval "$BUILD_CMD"
+          done
+
+          # Create manifest list
+          TAGS="${{ steps.meta.outputs.tags }}"
+          FIRST_TAG=$(echo "$TAGS" | awk '{print $1}')
+
+          buildah manifest create "$FIRST_TAG"
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            PLATFORM=$(echo "$PLATFORM" | xargs)
+            ARCH="${PLATFORM##*/}"
+            buildah manifest add "$FIRST_TAG" "containers-storage:${MANIFEST}-${ARCH}"
+          done
+
+          # Push manifest with all tags
+          for TAG in $TAGS; do
+            buildah manifest push --all "$FIRST_TAG" "docker://${TAG}"
+          done
