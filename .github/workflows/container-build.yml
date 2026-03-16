@@ -177,10 +177,12 @@ jobs:
           echo "$PASSWORD" | buildah login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
 
       - name: Create and push manifest
+        id: push
         run: |
           TAGS="${{ needs.prepare.outputs.tags }}"
           FIRST_TAG=$(echo "$TAGS" | awk '{print $1}')
           STAGING_TAG="${{ needs.prepare.outputs.staging-tag }}"
+          IMAGE="${{ needs.prepare.outputs.image }}"
 
           # Parse platforms to get architectures
           IFS=',' read -ra PLATFORMS <<< "${{ inputs.platforms }}"
@@ -194,10 +196,20 @@ jobs:
             buildah manifest add "$FIRST_TAG" "docker://${STAGING_TAG}-${ARCH}"
           done
 
-          # Push manifest with all tags
+          # Push manifest with first tag and capture digest
+          mkdir -p /tmp/digests
+          echo "Pushing manifest as ${FIRST_TAG}..."
+          buildah manifest push --all --digestfile /tmp/digests/manifest "$FIRST_TAG" "docker://${FIRST_TAG}"
+          DIGEST=$(cat /tmp/digests/manifest)
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Manifest digest: ${DIGEST}"
+
+          # Push remaining tags
           for TAG in $TAGS; do
-            echo "Pushing manifest as ${TAG}..."
-            buildah manifest push --all "$FIRST_TAG" "docker://${TAG}"
+            if [ "$TAG" != "$FIRST_TAG" ]; then
+              echo "Pushing manifest as ${TAG}..."
+              buildah manifest push --all "$FIRST_TAG" "docker://${TAG}"
+            fi
           done
 
           # Clean up staging tags
@@ -207,17 +219,11 @@ jobs:
             echo "Note: staging image ${STAGING_TAG}-${ARCH} can be cleaned up from the registry"
           done
 
-      - name: Sign container images with cosign
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign container image
         run: |
-          TAGS="${{ needs.prepare.outputs.tags }}"
-          for TAG in $TAGS; do
-            DIGEST=$(buildah manifest inspect "docker://${TAG}" | jq -r '.digest // empty' 2>/dev/null || true)
-            if [ -n "$DIGEST" ]; then
-              IMAGE="${TAG%%:*}@${DIGEST}"
-              echo "Signing ${IMAGE}..."
-              cosign sign --yes "${IMAGE}"
-            else
-              echo "Signing ${TAG}..."
-              cosign sign --yes "${TAG}"
-            fi
-          done
+          IMAGE="${{ needs.prepare.outputs.image }}@${{ steps.push.outputs.digest }}"
+          echo "Signing ${IMAGE}..."
+          cosign sign --yes "${IMAGE}"
