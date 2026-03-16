@@ -12,9 +12,6 @@ on:
         type: string
         default: "fs"
 
-permissions:
-  contents: read
-
 jobs:
   trivy-scan:
     name: Trivy Filesystem Scan

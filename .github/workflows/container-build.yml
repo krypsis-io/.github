@@ -39,10 +39,6 @@ on:
         required: false
         description: "Registry password (defaults to GITHUB_TOKEN for GHCR)"
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   build:
     name: Build & Push
