@@ -67,7 +67,7 @@ jobs:
             if [ "${{ inputs.use-qemu }}" = "true" ] || [ "$ARCH" = "amd64" ]; then
               RUNNER="ubuntu-latest"
             else
-              RUNNER="ubuntu-latest-arm"
+              RUNNER="ubuntu-24.04-arm"
             fi
 
             if [ "$FIRST" = true ]; then
