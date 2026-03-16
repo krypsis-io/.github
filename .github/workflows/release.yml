@@ -27,6 +27,13 @@ on:
         description: "Go module path prefix for ldflags version injection (e.g. github.com/user/repo/cmd/app/cmd)"
         type: string
         default: ""
+    outputs:
+      new-release-published:
+        description: "Whether a new release was published"
+        value: ${{ jobs.release.outputs.new-release-published }}
+      new-release-version:
+        description: "The new release version (without v prefix)"
+        value: ${{ jobs.release.outputs.new-release-version }}
 
 jobs:
   release:
