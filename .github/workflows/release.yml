@@ -78,21 +78,15 @@ jobs:
           go-version-file: ${{ inputs.go-version-file }}
           cache: ${{ steps.detect-go.outputs.has-go-sum == 'true' }}
 
-      - name: Generate SBOM (CycloneDX)
+      - name: Submit SBOM to dependency graph
         if: inputs.generate-sbom && github.event.repository.visibility == 'public'
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
-          format: cyclonedx
-          output: sbom.cdx.json
-
-      - name: Submit SBOM to dependency graph
-        if: inputs.generate-sbom && github.event.repository.visibility == 'public'
-        uses: anchore/sbom-action@v0.23.1
-        with:
-          path: .
-          dependency-snapshot: true
+          format: github
+          output: dependency-results.sbom.json
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install semantic-release
         run: npm install -g semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec
