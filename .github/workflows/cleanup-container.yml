@@ -1,0 +1,65 @@
+name: Cleanup Container Images
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Container image name (defaults to repo name)"
+        type: string
+        default: ""
+      registry:
+        description: "Container registry"
+        type: string
+        default: "ghcr.io"
+
+jobs:
+  cleanup:
+    name: Delete Branch Container Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete container images tagged with deleted branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.event.ref }}"
+          # Normalize branch name the same way container-build does
+          BRANCH="${BRANCH//\//-}"
+
+          IMAGE="${{ inputs.image-name }}"
+          if [ -z "$IMAGE" ]; then
+            IMAGE="${GITHUB_REPOSITORY##*/}"
+          fi
+
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          echo "Looking for images tagged '${BRANCH}' in ${OWNER}/${IMAGE}..."
+
+          # Find versions with the branch tag
+          VERSIONS=$(gh api \
+            "users/${OWNER}/packages/container/${IMAGE}/versions" \
+            --paginate \
+            --jq ".[] | select(.metadata.container.tags | index(\"${BRANCH}\")) | .id" 2>/dev/null || true)
+
+          # Also clean up staging images from this branch
+          STAGING_VERSIONS=$(gh api \
+            "users/${OWNER}/packages/container/${IMAGE}/versions" \
+            --paginate \
+            --jq "[.[] | select(.metadata.container.tags | any(startswith(\"staging-\"))) | select(.metadata.container.tags | length == 1) | .id] | .[]" 2>/dev/null || true)
+
+          if [ -z "$VERSIONS" ] && [ -z "$STAGING_VERSIONS" ]; then
+            echo "No images found to clean up"
+            exit 0
+          fi
+
+          for VERSION_ID in $VERSIONS; do
+            echo "Deleting version ${VERSION_ID} (tagged: ${BRANCH})..."
+            gh api -X DELETE \
+              "users/${OWNER}/packages/container/${IMAGE}/versions/${VERSION_ID}" || true
+          done
+
+          for VERSION_ID in $STAGING_VERSIONS; do
+            echo "Deleting orphaned staging version ${VERSION_ID}..."
+            gh api -X DELETE \
+              "users/${OWNER}/packages/container/${IMAGE}/versions/${VERSION_ID}" || true
+          done
+
+          echo "Cleanup complete"
