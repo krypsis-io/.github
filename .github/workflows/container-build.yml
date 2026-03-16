@@ -174,7 +174,10 @@ jobs:
           PASSWORD="${{ secrets.REGISTRY_PASSWORD }}"
           if [ -z "$USERNAME" ]; then USERNAME="${{ github.actor }}"; fi
           if [ -z "$PASSWORD" ]; then PASSWORD="${{ secrets.GITHUB_TOKEN }}"; fi
+          # Buildah login (for manifest operations)
           echo "$PASSWORD" | buildah login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
+          # Docker login (for cosign signature push)
+          echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
 
       - name: Create and push manifest
         id: push
