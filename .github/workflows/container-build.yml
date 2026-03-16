@@ -62,12 +62,18 @@ jobs:
 
           # Determine tags based on trigger event
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            # Tag push or release event with a version tag
+            # Release event with a version tag
             VERSION="${GITHUB_REF#refs/tags/}"
             TAGS="${FULL_IMAGE}:${VERSION}${SUFFIX} ${FULL_IMAGE}:latest${SUFFIX}"
+          elif [[ "$GITHUB_REF" == refs/pull/* ]]; then
+            # PR build — tag with branch name
+            BRANCH="${GITHUB_HEAD_REF//\//-}"
+            TAGS="${FULL_IMAGE}:${BRANCH}${SUFFIX}"
           elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
-            # Push to branch (e.g. main) — tag as latest
-            TAGS="${FULL_IMAGE}:latest${SUFFIX}"
+            # Push to branch — tag with branch name
+            BRANCH="${GITHUB_REF#refs/heads/}"
+            BRANCH="${BRANCH//\//-}"
+            TAGS="${FULL_IMAGE}:${BRANCH}${SUFFIX}"
           else
             SHA="${GITHUB_SHA::8}"
             TAGS="${FULL_IMAGE}:sha-${SHA}${SUFFIX}"
