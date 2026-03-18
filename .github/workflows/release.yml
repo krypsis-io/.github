@@ -27,6 +27,13 @@ on:
         description: "Go module path prefix for ldflags version injection (e.g. github.com/user/repo/cmd/app/cmd)"
         type: string
         default: ""
+    secrets:
+      APP_ID:
+        required: false
+        description: "GitHub App ID for generating a token that triggers downstream workflows (optional, falls back to GITHUB_TOKEN)"
+      APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key (optional, falls back to GITHUB_TOKEN)"
     outputs:
       new-release-published:
         description: "Whether a new release was published"
@@ -88,6 +95,14 @@ jobs:
           output: dependency-results.sbom.json
           github-pat: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate GitHub App token
+        id: app-token
+        if: secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Install semantic-release
         run: npm install -g semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec
 
@@ -100,7 +115,7 @@ jobs:
       - name: Semantic Release
         id: semantic
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           npx semantic-release
           git fetch --tags
@@ -151,7 +166,7 @@ jobs:
       - name: Upload Go binaries to release
         if: steps.detect-go.outputs.is-go == 'true' && steps.semantic.outputs.new_release_published == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           BINARY="${{ steps.vars.outputs.binary }}"
           VERSION="${{ steps.vars.outputs.version }}"
