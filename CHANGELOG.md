@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/cwaits6/.github/compare/v1.5.0...v1.5.1) (2026-03-19)
+
+
+### Bug Fixes
+
+* pin scorecard-action to v2.4.3 ([#6](https://github.com/cwaits6/.github/issues/6)) ([6785415](https://github.com/cwaits6/.github/commit/6785415118f11f24f1a29f4cc247b476de92406f))
+
 # [1.5.0](https://github.com/cwaits6/.github/compare/v1.4.0...v1.5.0) (2026-03-19)
 
 
