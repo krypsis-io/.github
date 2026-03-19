@@ -35,6 +35,10 @@ on:
         description: "Use QEMU emulation instead of native ARM runners (for private repos)"
         type: boolean
         default: false
+      dockerhub-image:
+        description: "Optional Docker Hub image name (e.g. docker.io/user/repo). If empty, Docker Hub is skipped."
+        type: string
+        default: ""
     secrets:
       REGISTRY_USERNAME:
         required: false
@@ -42,6 +46,12 @@ on:
       REGISTRY_PASSWORD:
         required: false
         description: "Registry password (defaults to GITHUB_TOKEN for GHCR)"
+      DOCKERHUB_USERNAME:
+        required: false
+        description: "Docker Hub username (required if dockerhub-image is set)"
+      DOCKERHUB_TOKEN:
+        required: false
+        description: "Docker Hub access token (required if dockerhub-image is set)"
 
 jobs:
   prepare:
@@ -52,6 +62,7 @@ jobs:
       image: ${{ steps.meta.outputs.image }}
       tags: ${{ steps.meta.outputs.tags }}
       staging-tag: ${{ steps.meta.outputs.staging-tag }}
+      dockerhub-tags: ${{ steps.meta.outputs.dockerhub-tags }}
     steps:
       - name: Generate platform matrix
         id: matrix
@@ -110,6 +121,15 @@ jobs:
             TAGS="${FULL_IMAGE}:sha-${SHA}${SUFFIX}"
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+          # Docker Hub tags (only for tagged releases when dockerhub-image is set)
+          DOCKERHUB_IMAGE="${{ inputs.dockerhub-image }}"
+          DOCKERHUB_TAGS=""
+          if [ -n "$DOCKERHUB_IMAGE" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            DOCKERHUB_TAGS="${DOCKERHUB_IMAGE}:${VERSION}${SUFFIX} ${DOCKERHUB_IMAGE}:latest${SUFFIX}"
+          fi
+          echo "dockerhub-tags=$DOCKERHUB_TAGS" >> "$GITHUB_OUTPUT"
 
           # Staging tag prefix for per-platform images
           SHA="${GITHUB_SHA::8}"
@@ -179,6 +199,11 @@ jobs:
           # Docker login (for cosign signature push)
           echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
 
+      - name: Login to Docker Hub
+        if: needs.prepare.outputs.dockerhub-tags != ''
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | buildah login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin docker.io
+
       - name: Create and push manifest
         id: push
         run: |
@@ -207,13 +232,22 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "Manifest digest: ${DIGEST}"
 
-          # Push remaining tags
+          # Push remaining GHCR tags
           for TAG in $TAGS; do
             if [ "$TAG" != "$FIRST_TAG" ]; then
               echo "Pushing manifest as ${TAG}..."
               buildah manifest push --all "$FIRST_TAG" "docker://${TAG}"
             fi
           done
+
+          # Push Docker Hub tags
+          DOCKERHUB_TAGS="${{ needs.prepare.outputs.dockerhub-tags }}"
+          if [ -n "$DOCKERHUB_TAGS" ]; then
+            for TAG in $DOCKERHUB_TAGS; do
+              echo "Pushing manifest as ${TAG}..."
+              buildah manifest push --all "$FIRST_TAG" "docker://${TAG}"
+            done
+          fi
 
           # Clean up staging tags
           for PLATFORM in "${PLATFORMS[@]}"; do
