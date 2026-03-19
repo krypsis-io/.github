@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/cwaits6/.github/compare/v1.5.1...v1.5.2) (2026-03-19)
+
+
+### Bug Fixes
+
+* move scorecard write permissions to job level ([#7](https://github.com/cwaits6/.github/issues/7)) ([1bdc765](https://github.com/cwaits6/.github/commit/1bdc76598a12bc9c4831de0def4da141908599df))
+
 ## [1.5.1](https://github.com/cwaits6/.github/compare/v1.5.0...v1.5.1) (2026-03-19)
 
 
