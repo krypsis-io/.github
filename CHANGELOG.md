@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/cwaits6/.github/compare/v1.4.0...v1.5.0) (2026-03-19)
+
+
+### Features
+
+* add reusable OpenSSF Scorecard workflow ([#5](https://github.com/cwaits6/.github/issues/5)) ([5b69976](https://github.com/cwaits6/.github/commit/5b6997646658146953d52205e809e62ae0459b47))
+
 # [1.4.0](https://github.com/cwaits6/.github/compare/v1.3.0...v1.4.0) (2026-03-19)
 
 
