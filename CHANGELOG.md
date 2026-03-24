@@ -1,3 +1,10 @@
+## [1.6.3](https://github.com/cwaits6/.github/compare/v1.6.2...v1.6.3) (2026-03-24)
+
+
+### Bug Fixes
+
+* pass App token to checkout for git push bypass ([#12](https://github.com/cwaits6/.github/issues/12)) ([3a6cb0d](https://github.com/cwaits6/.github/commit/3a6cb0d5173b43e2f206cad16cab26dc200c0061))
+
 ## [1.6.2](https://github.com/cwaits6/.github/compare/v1.6.1...v1.6.2) (2026-03-24)
 
 
