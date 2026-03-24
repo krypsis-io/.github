@@ -1,3 +1,10 @@
+## [1.6.2](https://github.com/cwaits6/.github/compare/v1.6.1...v1.6.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* use App token for git push in release workflow ([#11](https://github.com/cwaits6/.github/issues/11)) ([ded1387](https://github.com/cwaits6/.github/commit/ded1387aa497110003ee1195ec8a9f6417cbcd69))
+
 ## [1.6.1](https://github.com/cwaits6/.github/compare/v1.6.0...v1.6.1) (2026-03-24)
 
 
