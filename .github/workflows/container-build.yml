@@ -66,8 +66,11 @@ jobs:
     steps:
       - name: Generate platform matrix
         id: matrix
+        env:
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
+          INPUT_USE_QEMU: ${{ inputs.use-qemu }}
         run: |
-          IFS=',' read -ra PLATFORMS <<< "${{ inputs.platforms }}"
+          IFS=',' read -ra PLATFORMS <<< "$INPUT_PLATFORMS"
           MATRIX="["
           FIRST=true
           for PLATFORM in "${PLATFORMS[@]}"; do
@@ -75,7 +78,7 @@ jobs:
             ARCH="${PLATFORM##*/}"
 
             # Select runner: native ARM runner unless use-qemu is enabled
-            if [ "${{ inputs.use-qemu }}" = "true" ] || [ "$ARCH" = "amd64" ]; then
+            if [ "$INPUT_USE_QEMU" = "true" ] || [ "$ARCH" = "amd64" ]; then
               RUNNER="ubuntu-latest"
             else
               RUNNER="ubuntu-24.04-arm"
@@ -93,9 +96,14 @@ jobs:
 
       - name: Set image metadata
         id: meta
+        env:
+          INPUT_REGISTRY: ${{ inputs.registry }}
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+          INPUT_TAG_SUFFIX: ${{ inputs.tag-suffix }}
+          INPUT_DOCKERHUB_IMAGE: ${{ inputs.dockerhub-image }}
         run: |
-          REGISTRY="${{ inputs.registry }}"
-          IMAGE="${{ inputs.image-name }}"
+          REGISTRY="$INPUT_REGISTRY"
+          IMAGE="$INPUT_IMAGE_NAME"
           if [ -z "$IMAGE" ]; then
             IMAGE="${GITHUB_REPOSITORY,,}"
           fi
@@ -103,7 +111,7 @@ jobs:
           echo "image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
 
           TAGS=""
-          SUFFIX="${{ inputs.tag-suffix }}"
+          SUFFIX="$INPUT_TAG_SUFFIX"
 
           # Determine tags based on trigger event
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
@@ -123,7 +131,7 @@ jobs:
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
 
           # Docker Hub tags (only for tagged releases when dockerhub-image is set)
-          DOCKERHUB_IMAGE="${{ inputs.dockerhub-image }}"
+          DOCKERHUB_IMAGE="$INPUT_DOCKERHUB_IMAGE"
           DOCKERHUB_TAGS=""
           if [ -n "$DOCKERHUB_IMAGE" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
@@ -143,7 +151,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install QEMU for cross-platform emulation
         if: inputs.use-qemu && matrix.arch != 'amd64'
@@ -152,36 +160,48 @@ jobs:
           sudo apt-get install -y -qq qemu-user-static
 
       - name: Login to registry
+        env:
+          REG_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REG_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_REGISTRY: ${{ inputs.registry }}
         run: |
-          USERNAME="${{ secrets.REGISTRY_USERNAME }}"
-          PASSWORD="${{ secrets.REGISTRY_PASSWORD }}"
-          if [ -z "$USERNAME" ]; then USERNAME="${{ github.actor }}"; fi
-          if [ -z "$PASSWORD" ]; then PASSWORD="${{ secrets.GITHUB_TOKEN }}"; fi
-          echo "$PASSWORD" | buildah login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
+          USERNAME="$REG_USERNAME"
+          PASSWORD="$REG_PASSWORD"
+          if [ -z "$USERNAME" ]; then USERNAME="$ACTOR"; fi
+          if [ -z "$PASSWORD" ]; then PASSWORD="$GH_TOKEN"; fi
+          echo "$PASSWORD" | buildah login -u "$USERNAME" --password-stdin "$INPUT_REGISTRY"
 
       - name: Build and push (${{ matrix.platform }})
+        env:
+          STAGING_TAG: ${{ needs.prepare.outputs.staging-tag }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          INPUT_DOCKERFILE: ${{ inputs.dockerfile }}
+          INPUT_BUILD_ARGS: ${{ inputs.build-args }}
+          INPUT_CONTEXT: ${{ inputs.context }}
         run: |
-          STAGING_TAG="${{ needs.prepare.outputs.staging-tag }}-${{ matrix.arch }}"
+          FULL_STAGING_TAG="${STAGING_TAG}-${MATRIX_ARCH}"
 
           BUILD_CMD="buildah build \
-            --platform ${{ matrix.platform }} \
+            --platform ${MATRIX_PLATFORM} \
             --format oci \
-            -f ${{ inputs.dockerfile }} \
-            -t ${STAGING_TAG}"
+            -f ${INPUT_DOCKERFILE} \
+            -t ${FULL_STAGING_TAG}"
 
           # Add build args
-          BUILD_ARGS="${{ inputs.build-args }}"
-          if [ -n "$BUILD_ARGS" ]; then
+          if [ -n "$INPUT_BUILD_ARGS" ]; then
             while IFS= read -r arg; do
               [ -n "$arg" ] && BUILD_CMD="$BUILD_CMD --build-arg $arg"
-            done <<< "$BUILD_ARGS"
+            done <<< "$INPUT_BUILD_ARGS"
           fi
 
-          BUILD_CMD="$BUILD_CMD ${{ inputs.context }}"
+          BUILD_CMD="$BUILD_CMD ${INPUT_CONTEXT}"
           eval "$BUILD_CMD"
 
           # Push per-platform image to registry
-          buildah push "${STAGING_TAG}" "docker://${STAGING_TAG}"
+          buildah push "${FULL_STAGING_TAG}" "docker://${FULL_STAGING_TAG}"
 
   manifest:
     name: Create & Push Manifest
@@ -189,31 +209,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Login to registry
+        env:
+          REG_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REG_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_REGISTRY: ${{ inputs.registry }}
         run: |
-          USERNAME="${{ secrets.REGISTRY_USERNAME }}"
-          PASSWORD="${{ secrets.REGISTRY_PASSWORD }}"
-          if [ -z "$USERNAME" ]; then USERNAME="${{ github.actor }}"; fi
-          if [ -z "$PASSWORD" ]; then PASSWORD="${{ secrets.GITHUB_TOKEN }}"; fi
+          USERNAME="$REG_USERNAME"
+          PASSWORD="$REG_PASSWORD"
+          if [ -z "$USERNAME" ]; then USERNAME="$ACTOR"; fi
+          if [ -z "$PASSWORD" ]; then PASSWORD="$GH_TOKEN"; fi
           # Buildah login (for manifest operations)
-          echo "$PASSWORD" | buildah login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
+          echo "$PASSWORD" | buildah login -u "$USERNAME" --password-stdin "$INPUT_REGISTRY"
           # Docker login (for cosign signature push)
-          echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin "${{ inputs.registry }}"
+          echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin "$INPUT_REGISTRY"
 
       - name: Login to Docker Hub
         if: needs.prepare.outputs.dockerhub-tags != ''
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | buildah login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin docker.io
+          echo "$DOCKERHUB_TOKEN" | buildah login -u "$DOCKERHUB_USERNAME" --password-stdin docker.io
 
       - name: Create and push manifest
         id: push
+        env:
+          TAGS: ${{ needs.prepare.outputs.tags }}
+          STAGING_TAG: ${{ needs.prepare.outputs.staging-tag }}
+          IMAGE: ${{ needs.prepare.outputs.image }}
+          DOCKERHUB_TAGS: ${{ needs.prepare.outputs.dockerhub-tags }}
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
         run: |
-          TAGS="${{ needs.prepare.outputs.tags }}"
           FIRST_TAG=$(echo "$TAGS" | awk '{print $1}')
-          STAGING_TAG="${{ needs.prepare.outputs.staging-tag }}"
-          IMAGE="${{ needs.prepare.outputs.image }}"
 
           # Parse platforms to get architectures
-          IFS=',' read -ra PLATFORMS <<< "${{ inputs.platforms }}"
+          IFS=',' read -ra PLATFORMS <<< "$INPUT_PLATFORMS"
 
           # Create manifest from per-platform registry images
           buildah manifest create "$FIRST_TAG"
@@ -241,7 +273,6 @@ jobs:
           done
 
           # Push Docker Hub tags
-          DOCKERHUB_TAGS="${{ needs.prepare.outputs.dockerhub-tags }}"
           if [ -n "$DOCKERHUB_TAGS" ]; then
             for TAG in $DOCKERHUB_TAGS; do
               echo "Pushing manifest as ${TAG}..."
@@ -257,10 +288,13 @@ jobs:
           done
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3
 
       - name: Sign container image
+        env:
+          IMAGE: ${{ needs.prepare.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
-          IMAGE="${{ needs.prepare.outputs.image }}@${{ steps.push.outputs.digest }}"
-          echo "Signing ${IMAGE}..."
-          cosign sign --yes "${IMAGE}"
+          FULL_IMAGE="${IMAGE}@${DIGEST}"
+          echo "Signing ${FULL_IMAGE}..."
+          cosign sign --yes "${FULL_IMAGE}"

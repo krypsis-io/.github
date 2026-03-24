@@ -20,12 +20,14 @@ jobs:
       - name: Delete container images tagged with deleted branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_REF: ${{ github.event.ref }}
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
         run: |
-          BRANCH="${{ github.event.ref }}"
+          BRANCH="$EVENT_REF"
           # Normalize branch name the same way container-build does
           BRANCH="${BRANCH//\//-}"
 
-          IMAGE="${{ inputs.image-name }}"
+          IMAGE="$INPUT_IMAGE_NAME"
           if [ -z "$IMAGE" ]; then
             IMAGE="${GITHUB_REPOSITORY##*/}"
           fi
