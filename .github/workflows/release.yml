@@ -11,22 +11,6 @@ on:
         description: "Generate and submit SBOM"
         type: boolean
         default: true
-      go-version-file:
-        description: "Path to go.mod for Go version detection (leave empty to skip Go builds)"
-        type: string
-        default: "go.mod"
-      go-binary-name:
-        description: "Name of the Go binary to build (defaults to repo name)"
-        type: string
-        default: ""
-      go-main-package:
-        description: "Path to the Go main package"
-        type: string
-        default: "."
-      go-ldflags-prefix:
-        description: "Go module path prefix for ldflags version injection (e.g. github.com/user/repo/cmd/app/cmd)"
-        type: string
-        default: ""
     secrets:
       APP_ID:
         required: false
@@ -54,40 +38,18 @@ jobs:
       new-release-published: ${{ steps.semantic.outputs.new_release_published }}
       new-release-version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: ${{ inputs.node-version }}
 
-      - name: Detect Go project
-        id: detect-go
-        run: |
-          if [ -f "${{ inputs.go-version-file }}" ]; then
-            echo "is-go=true" >> "$GITHUB_OUTPUT"
-            echo "Go project detected"
-            if [ -f "go.sum" ]; then
-              echo "has-go-sum=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "has-go-sum=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "is-go=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Go
-        if: steps.detect-go.outputs.is-go == 'true'
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: ${{ inputs.go-version-file }}
-          cache: ${{ steps.detect-go.outputs.has-go-sum == 'true' }}
-
       - name: Submit SBOM to dependency graph
         if: inputs.generate-sbom && github.event.repository.visibility == 'public'
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -110,7 +72,7 @@ jobs:
       - name: Generate GitHub App token
         id: app-token
         if: steps.app-check.outputs.available == 'true'
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -138,52 +100,3 @@ jobs:
           else
             echo "new_release_published=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Set build vars
-        if: steps.detect-go.outputs.is-go == 'true' && steps.semantic.outputs.new_release_published == 'true'
-        id: vars
-        run: |
-          VERSION="v${{ steps.semantic.outputs.new_release_version }}"
-          COMMIT="${GITHUB_SHA::8}"
-          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          BINARY="${{ inputs.go-binary-name }}"
-          if [ -z "$BINARY" ]; then
-            BINARY="${GITHUB_REPOSITORY##*/}"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
-          echo "date=$DATE" >> "$GITHUB_OUTPUT"
-          echo "binary=$BINARY" >> "$GITHUB_OUTPUT"
-
-          LDFLAGS="-s -w"
-          if [ -n "${{ inputs.go-ldflags-prefix }}" ]; then
-            LDFLAGS="$LDFLAGS -X ${{ inputs.go-ldflags-prefix }}.version=$VERSION"
-            LDFLAGS="$LDFLAGS -X ${{ inputs.go-ldflags-prefix }}.commit=$COMMIT"
-            LDFLAGS="$LDFLAGS -X ${{ inputs.go-ldflags-prefix }}.date=$DATE"
-          fi
-          echo "ldflags=$LDFLAGS" >> "$GITHUB_OUTPUT"
-
-      - name: Build Go binaries (multi-arch)
-        if: steps.detect-go.outputs.is-go == 'true' && steps.semantic.outputs.new_release_published == 'true'
-        run: |
-          BINARY="${{ steps.vars.outputs.binary }}"
-          LDFLAGS="${{ steps.vars.outputs.ldflags }}"
-          MAIN="${{ inputs.go-main-package }}"
-
-          CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o "${BINARY}-linux-amd64"   "$MAIN"
-          CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o "${BINARY}-linux-arm64"   "$MAIN"
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o "${BINARY}-darwin-amd64"  "$MAIN"
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o "${BINARY}-darwin-arm64"  "$MAIN"
-
-      - name: Upload Go binaries to release
-        if: steps.detect-go.outputs.is-go == 'true' && steps.semantic.outputs.new_release_published == 'true'
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-        run: |
-          BINARY="${{ steps.vars.outputs.binary }}"
-          VERSION="${{ steps.vars.outputs.version }}"
-          gh release upload "$VERSION" \
-            "${BINARY}-linux-amd64" \
-            "${BINARY}-linux-arm64" \
-            "${BINARY}-darwin-amd64" \
-            "${BINARY}-darwin-arm64"
