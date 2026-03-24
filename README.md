@@ -2,21 +2,25 @@
 
 Shared reusable GitHub Actions workflows for `cwaits6` repos.
 
+All actions are SHA-pinned. Shell injection mitigations applied (env vars instead of direct `${{ }}` interpolation in `run:` blocks).
+
 ## Available Workflows
 
 | Workflow | Description | Key Inputs |
 |----------|-------------|------------|
+| `release.yml` | Semantic-release with SBOM generation | `node-version`, `generate-sbom` |
+| `goreleaser.yml` | GoReleaser binary builds on release | `go-version-file` |
+| `container-build.yml` | Buildah multi-arch container build, push & cosign signing | `dockerfile`, `platforms`, `dockerhub-image` |
+| `cleanup-container.yml` | Delete branch-tagged container images on branch deletion | `image-name`, `registry` |
 | `dependency-review.yml` | PR dependency change review | `fail-on-severity` |
 | `trivy.yml` | Filesystem vulnerability scan | `severity`, `scan-type` |
-| `release.yml` | Semantic-release + SBOM + Go binary builds | `go-main-package`, `go-ldflags-prefix`, `go-binary-name` |
-| `container-build.yml` | Buildah multi-arch container build & push | `dockerfile`, `platforms`, `build-args`, `dockerhub-image` |
+| `semgrep.yml` | Static analysis with autofix and PR comments | `semgrep-config` |
 | `scorecard.yml` | OpenSSF Scorecard analysis with SARIF upload | `publish-results` |
 | `cleanup-preview.yml` | Vercel preview deployment cleanup | `production-keep-count` |
-| `semgrep.yml` | Static analysis with autofix and PR comments | `semgrep-config` |
 
 ## Usage
 
-Create thin caller workflows in your repo:
+Create thin caller workflows in your repo.
 
 ### PR checks
 
@@ -26,6 +30,10 @@ name: PR
 on:
   pull_request:
     branches: [main]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 jobs:
   dependency-review:
     uses: cwaits6/.github/.github/workflows/dependency-review.yml@main
@@ -35,7 +43,7 @@ jobs:
     uses: cwaits6/.github/.github/workflows/semgrep.yml@main
 ```
 
-### Release (Node.js project)
+### Release
 
 ```yaml
 # .github/workflows/release.yml
@@ -43,29 +51,62 @@ name: Release
 on:
   push:
     branches: [main]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 jobs:
   release:
     uses: cwaits6/.github/.github/workflows/release.yml@main
+    secrets:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 ```
 
-### Release (Go project)
+Runs semantic-release to determine version bumps from conventional commits, generates SBOM via Trivy, and creates a GitHub release. App credentials are optional — falls back to `GITHUB_TOKEN`.
+
+### GoReleaser (Go projects)
 
 ```yaml
-# .github/workflows/release.yml
-name: Release
+# .github/workflows/goreleaser.yml
+name: GoReleaser
 on:
-  push:
-    branches: [main]
-jobs:
   release:
-    uses: cwaits6/.github/.github/workflows/release.yml@main
-    with:
-      go-binary-name: my-tool
-      go-main-package: ./cmd/my-tool
-      go-ldflags-prefix: github.com/cwaits6/my-tool/cmd/my-tool/cmd
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  goreleaser:
+    uses: cwaits6/.github/.github/workflows/goreleaser.yml@main
 ```
 
-Auto-detects `go.mod` — if present, builds multi-arch binaries (linux/darwin, amd64/arm64) and uploads them to the GitHub release. If no `go.mod`, runs semantic-release only.
+Requires a `.goreleaser.yml` in the repo root. Builds multi-arch Go binaries and uploads them to the GitHub release created by semantic-release.
+
+Example `.goreleaser.yml`:
+
+```yaml
+version: 2
+project_name: my-tool
+builds:
+  - main: ./cmd/my-tool
+    binary: my-tool
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: checksums.txt
+changelog:
+  disable: true
+```
 
 ### Container build (Buildah)
 
@@ -73,8 +114,12 @@ Auto-detects `go.mod` — if present, builds multi-arch binaries (linux/darwin, 
 # .github/workflows/container-build.yml
 name: Container Build
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
+permissions:
+  contents: read
+  packages: write
+  id-token: write
 jobs:
   build:
     uses: cwaits6/.github/.github/workflows/container-build.yml@main
@@ -83,7 +128,7 @@ jobs:
       platforms: linux/amd64,linux/arm64
 ```
 
-Rootless Buildah build, multi-arch manifest, pushes to GHCR by default.
+Rootless Buildah build, multi-arch manifest, pushes to GHCR, and signs with cosign.
 
 #### With Docker Hub
 
@@ -94,13 +139,26 @@ jobs:
     with:
       dockerfile: deploy/docker/Dockerfile
       platforms: linux/amd64,linux/arm64
-      dockerhub-image: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'docker.io/user/repo' || '' }}
+      dockerhub-image: docker.io/user/repo
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 ```
 
-Pushes to Docker Hub only on tagged releases. Pass an empty string to skip.
+### Container cleanup
+
+```yaml
+# .github/workflows/cleanup-container.yml
+name: Cleanup Container Images
+on:
+  delete:
+jobs:
+  cleanup:
+    if: github.event.ref_type == 'branch'
+    uses: cwaits6/.github/.github/workflows/cleanup-container.yml@main
+```
+
+Deletes branch-tagged container images from GHCR when a branch is deleted.
 
 ### OpenSSF Scorecard
 
@@ -112,12 +170,15 @@ on:
     branches: [main]
   schedule:
     - cron: "0 6 * * 1"
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+  actions: read
 jobs:
   scorecard:
     uses: cwaits6/.github/.github/workflows/scorecard.yml@main
 ```
-
-Runs OpenSSF Scorecard, uploads SARIF to the GitHub Security tab, and publishes results to scorecard.dev (enables the badge).
 
 ### Vercel cleanup
 
@@ -136,6 +197,8 @@ jobs:
 ```
 
 ## Overriding Defaults
+
+All workflows accept optional inputs with sensible defaults:
 
 ```yaml
 jobs:
