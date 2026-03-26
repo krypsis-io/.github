@@ -1,6 +1,6 @@
 # .github
 
-Shared reusable GitHub Actions workflows for `cwaits6` repos.
+Shared reusable GitHub Actions workflows for `krypsis-io` repos.
 
 All actions are SHA-pinned. Shell injection mitigations applied (env vars instead of direct `${{ }}` interpolation in `run:` blocks).
 
@@ -36,11 +36,11 @@ permissions:
   pull-requests: write
 jobs:
   dependency-review:
-    uses: cwaits6/.github/.github/workflows/dependency-review.yml@main
+    uses: krypsis-io/.github/.github/workflows/dependency-review.yml@main
   trivy:
-    uses: cwaits6/.github/.github/workflows/trivy.yml@main
+    uses: krypsis-io/.github/.github/workflows/trivy.yml@main
   semgrep:
-    uses: cwaits6/.github/.github/workflows/semgrep.yml@main
+    uses: krypsis-io/.github/.github/workflows/semgrep.yml@main
 ```
 
 ### Release
@@ -57,7 +57,7 @@ permissions:
   pull-requests: write
 jobs:
   release:
-    uses: cwaits6/.github/.github/workflows/release.yml@main
+    uses: krypsis-io/.github/.github/workflows/release.yml@main
     secrets:
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
@@ -77,7 +77,7 @@ permissions:
   contents: write
 jobs:
   goreleaser:
-    uses: cwaits6/.github/.github/workflows/goreleaser.yml@main
+    uses: krypsis-io/.github/.github/workflows/goreleaser.yml@main
 ```
 
 Requires a `.goreleaser.yml` in the repo root. Builds multi-arch Go binaries and uploads them to the GitHub release created by semantic-release.
@@ -122,7 +122,7 @@ permissions:
   id-token: write
 jobs:
   build:
-    uses: cwaits6/.github/.github/workflows/container-build.yml@main
+    uses: krypsis-io/.github/.github/workflows/container-build.yml@main
     with:
       dockerfile: deploy/docker/Dockerfile
       platforms: linux/amd64,linux/arm64
@@ -135,7 +135,7 @@ Rootless Buildah build, multi-arch manifest, pushes to GHCR, and signs with cosi
 ```yaml
 jobs:
   build:
-    uses: cwaits6/.github/.github/workflows/container-build.yml@main
+    uses: krypsis-io/.github/.github/workflows/container-build.yml@main
     with:
       dockerfile: deploy/docker/Dockerfile
       platforms: linux/amd64,linux/arm64
@@ -155,7 +155,7 @@ on:
 jobs:
   cleanup:
     if: github.event.ref_type == 'branch'
-    uses: cwaits6/.github/.github/workflows/cleanup-container.yml@main
+    uses: krypsis-io/.github/.github/workflows/cleanup-container.yml@main
 ```
 
 Deletes branch-tagged container images from GHCR when a branch is deleted.
@@ -177,7 +177,7 @@ permissions:
   actions: read
 jobs:
   scorecard:
-    uses: cwaits6/.github/.github/workflows/scorecard.yml@main
+    uses: krypsis-io/.github/.github/workflows/scorecard.yml@main
 ```
 
 ### Vercel cleanup
@@ -190,7 +190,7 @@ on:
     types: [closed]
 jobs:
   cleanup:
-    uses: cwaits6/.github/.github/workflows/cleanup-preview.yml@main
+    uses: krypsis-io/.github/.github/workflows/cleanup-preview.yml@main
     secrets:
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -203,7 +203,7 @@ All workflows accept optional inputs with sensible defaults:
 ```yaml
 jobs:
   scan:
-    uses: cwaits6/.github/.github/workflows/trivy.yml@main
+    uses: krypsis-io/.github/.github/workflows/trivy.yml@main
     with:
       severity: "CRITICAL"
 ```
