@@ -11,4 +11,4 @@ permissions:
 
 jobs:
   release:
-    uses: cwaits6/.github/.github/workflows/release.yml@main
+    uses: krypsis-io/.github/.github/workflows/release.yml@main
