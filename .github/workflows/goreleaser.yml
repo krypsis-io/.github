@@ -7,6 +7,13 @@ on:
         description: "Path to go.mod for Go version detection"
         type: string
         default: "go.mod"
+    secrets:
+      APP_ID:
+        required: false
+        description: "GitHub App ID for generating a Homebrew tap token (optional)"
+      APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key for generating a Homebrew tap token (optional)"
 
 permissions:
   contents: write
@@ -17,6 +24,27 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check for GitHub App credentials
+        id: app-check
+        env:
+          HAS_APP_ID: ${{ secrets.APP_ID }}
+          HAS_APP_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "$HAS_APP_ID" ] && [ -n "$HAS_APP_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate Homebrew tap token
+        id: tap-token
+        if: steps.app-check.outputs.available == 'true'
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          repositories: homebrew-tap
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
@@ -32,3 +60,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.tap-token.outputs.token || '' }}
