@@ -3,6 +3,7 @@
   "extends": ["config:recommended"],
   "labels": ["dependencies"],
   "commitMessagePrefix": "chore(deps):",
+  "minimumReleaseAge": "3 days",
   "automergeType": "pr",
   "minor": {
     "automerge": true

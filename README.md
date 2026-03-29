@@ -1,6 +1,6 @@
 # .github
 
-Shared reusable GitHub Actions workflows for `krypsis-io` repos.
+Shared reusable GitHub Actions workflows. Designed for use by `krypsis-io` repos but fully generic — private forks (mirrors) can use these workflows by replacing `krypsis-io` with their own org in the `uses:` references below.
 
 All actions are SHA-pinned. Shell injection mitigations applied (env vars instead of direct `${{ }}` interpolation in `run:` blocks).
 
@@ -17,6 +17,7 @@ All actions are SHA-pinned. Shell injection mitigations applied (env vars instea
 | `semgrep.yml` | Static analysis with autofix and PR comments | `semgrep-config` |
 | `scorecard.yml` | OpenSSF Scorecard analysis with SARIF upload | `publish-results` |
 | `cleanup-preview.yml` | Vercel preview deployment cleanup | `production-keep-count` |
+| `sync-upstream.yml` | Auto-sync private mirrors from upstream | _(schedule/manual)_ |
 
 ## Usage
 
@@ -195,6 +196,62 @@ jobs:
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 ```
+
+### Upstream sync (private mirrors)
+
+The `sync-upstream.yml` workflow automatically keeps private mirrors in sync with this repo. It runs weekly (Mondays at 6am UTC) and supports manual trigger.
+
+- Skipped in the upstream repo (`krypsis-io/.github`) — only activates in mirrors
+- Uses `--ff-only` so it fails loudly if the mirror has diverged
+
+No configuration needed — it's included automatically when you mirror the repo.
+
+## Private mirrors
+
+GitHub doesn't allow private forks of public repos. To use these workflows in a private org, create a mirror:
+
+```bash
+# 1. Create an empty private repo in your org
+gh repo create your-org/.github --private --description "Shared GitHub Actions workflows"
+
+# 2. Bare clone and mirror push
+git clone --bare https://github.com/krypsis-io/.github.git /tmp/.github-bare
+cd /tmp/.github-bare
+git push --mirror https://github.com/your-org/.github.git
+rm -rf /tmp/.github-bare
+
+# 3. Clone a working copy and add upstream for manual syncs
+gh repo clone your-org/.github /tmp/.github
+cd /tmp/.github
+git remote add upstream https://github.com/krypsis-io/.github.git
+```
+
+Your repos then reference the mirror instead of the upstream:
+
+```yaml
+jobs:
+  release:
+    uses: your-org/.github/.github/workflows/release.yml@main
+```
+
+The included `sync-upstream.yml` workflow will keep the mirror up to date automatically (weekly on Mondays). You can also trigger it manually from the Actions tab or sync manually:
+
+```bash
+git fetch upstream && git merge upstream/main --ff-only && git push origin main
+```
+
+## Private repo compatibility
+
+Workflows that require public repo features are automatically gated:
+
+| Workflow | Behavior in private repos |
+|----------|--------------------------|
+| `dependency-review.yml` | Skipped |
+| `release.yml` (SBOM step) | Skipped |
+| `scorecard.yml` | Skipped |
+| `release-self.yml` | Skipped (only runs in `krypsis-io/.github`) |
+
+All other workflows work in both public and private repos.
 
 ## Overriding Defaults
 
