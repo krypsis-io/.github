@@ -1,3 +1,16 @@
+# [1.7.0](https://github.com/krypsis-io/.github/compare/v1.6.3...v1.7.0) (2026-03-29)
+
+
+### Bug Fixes
+
+* install conventional commits preset for releases ([#16](https://github.com/krypsis-io/.github/issues/16)) ([7e8ac13](https://github.com/krypsis-io/.github/commit/7e8ac135572240fd147dc422957375a112b2b67d))
+* use local paths for self-test workflows ([#17](https://github.com/krypsis-io/.github/issues/17)) ([4250b67](https://github.com/krypsis-io/.github/commit/4250b67984b37f4621b6c1d7187502da170cb96c))
+
+
+### Features
+
+* generate app token for Homebrew tap in goreleaser workflow ([#15](https://github.com/krypsis-io/.github/issues/15)) ([fb2e7a6](https://github.com/krypsis-io/.github/commit/fb2e7a6cd35feffe083017dbdfdc29042b8e99c0))
+
 ## [1.6.3](https://github.com/krypsis-io/.github/compare/v1.6.2...v1.6.3) (2026-03-24)
 
 
