@@ -11,4 +11,4 @@ permissions:
 
 jobs:
   release:
-    uses: krypsis-io/.github/.github/workflows/release.yml@main
+    uses: ./.github/workflows/release.yml
