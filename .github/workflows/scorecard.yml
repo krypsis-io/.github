@@ -10,6 +10,7 @@ on:
 
 jobs:
   scorecard:
+    if: github.event.repository.visibility == 'public'
     permissions:
       contents: read
       security-events: write

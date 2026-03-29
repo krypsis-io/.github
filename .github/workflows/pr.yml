@@ -11,8 +11,8 @@ permissions:
 
 jobs:
   dependency-review:
-    uses: krypsis-io/.github/.github/workflows/dependency-review.yml@main
+    uses: ./.github/workflows/dependency-review.yml
   trivy:
-    uses: krypsis-io/.github/.github/workflows/trivy.yml@main
+    uses: ./.github/workflows/trivy.yml
   semgrep:
-    uses: krypsis-io/.github/.github/workflows/semgrep.yml@main
+    uses: ./.github/workflows/semgrep.yml
