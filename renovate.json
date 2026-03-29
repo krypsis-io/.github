@@ -15,6 +15,11 @@
     {
       "matchManagers": ["github-actions"],
       "automerge": true
+    },
+    {
+      "description": "Skip quarantine for vulnerability remediation PRs",
+      "matchUpdateTypes": ["vulnerability"],
+      "minimumReleaseAge": "0 seconds"
     }
   ]
 }
