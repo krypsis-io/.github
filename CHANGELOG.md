@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/krypsis-io/.github/compare/v1.8.0...v1.8.1) (2026-03-29)
+
+
+### Bug Fixes
+
+* add Node 24 env var to release and goreleaser workflows ([#19](https://github.com/krypsis-io/.github/issues/19)) ([137bbee](https://github.com/krypsis-io/.github/commit/137bbee314f7c2e1516a32439b6f1b27f09814c0))
+
 # [1.8.0](https://github.com/krypsis-io/.github/compare/v1.7.0...v1.8.0) (2026-03-29)
 
 
