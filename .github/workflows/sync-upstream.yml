@@ -28,5 +28,5 @@ jobs:
         run: |
           git remote add upstream https://github.com/krypsis-io/.github.git
           git fetch upstream main
-          git merge upstream/main --ff-only
-          git push origin main
+          git reset --hard upstream/main
+          git push origin main --force
