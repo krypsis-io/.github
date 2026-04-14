@@ -1,3 +1,10 @@
+## [1.8.3](https://github.com/krypsis-io/.github/compare/v1.8.2...v1.8.3) (2026-04-14)
+
+
+### Bug Fixes
+
+* use hard reset for upstream sync ([#32](https://github.com/krypsis-io/.github/issues/32)) ([28e3ca3](https://github.com/krypsis-io/.github/commit/28e3ca3e188a08038d2901b7df9d8d5d3d66c8c3))
+
 ## [1.8.2](https://github.com/krypsis-io/.github/compare/v1.8.1...v1.8.2) (2026-04-14)
 
 
