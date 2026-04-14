@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/krypsis-io/.github/compare/v1.8.3...v1.9.0) (2026-04-14)
+
+
+### Features
+
+* add self-hosted Renovate workflow for downstream orgs ([#33](https://github.com/krypsis-io/.github/issues/33)) ([ffe16ef](https://github.com/krypsis-io/.github/commit/ffe16efbef15cbd2ebed471d996bcebf3e51ca2c))
+
 ## [1.8.3](https://github.com/krypsis-io/.github/compare/v1.8.2...v1.8.3) (2026-04-14)
 
 
