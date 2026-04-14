@@ -202,7 +202,8 @@ jobs:
 The `sync-upstream.yml` workflow automatically keeps private mirrors in sync with this repo. It runs weekly (Mondays at 6am UTC) and supports manual trigger.
 
 - Skipped in the upstream repo (`krypsis-io/.github`) — only activates in mirrors
-- Uses `--ff-only` so it fails loudly if the mirror has diverged
+- Uses `git reset --hard` and force push to ensure the mirror is an exact copy of upstream
+- Requires a GitHub App token (`APP_ID` and `APP_PRIVATE_KEY` secrets) with Contents and Workflows write permissions to push workflow file changes
 
 No configuration needed — it's included automatically when you mirror the repo.
 
@@ -234,11 +235,14 @@ jobs:
     uses: your-org/.github/.github/workflows/release.yml@main
 ```
 
-The included `sync-upstream.yml` workflow will keep the mirror up to date automatically (weekly on Mondays). You can also trigger it manually from the Actions tab or sync manually:
+The sync workflow requires a GitHub App installed on your org with **Contents** and **Workflows** write permissions. Add the app credentials as repo secrets:
 
-```bash
-git fetch upstream && git merge upstream/main --ff-only && git push origin main
-```
+- `APP_ID` — the GitHub App's Client ID
+- `APP_PRIVATE_KEY` — the GitHub App's private key (`.pem` file contents)
+
+The included `sync-upstream.yml` workflow will keep the mirror up to date automatically (weekly on Mondays). You can also trigger it manually from the Actions tab.
+
+> **Note:** The sync does a hard reset to upstream, so any changes made directly to the mirror's `.github` repo will be overwritten. Place org-specific workflows in individual repos instead.
 
 ## Private repo compatibility
 
