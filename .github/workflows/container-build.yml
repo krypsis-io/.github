@@ -119,10 +119,12 @@ jobs:
             TAGS="${FULL_IMAGE}:${VERSION}${SUFFIX} ${FULL_IMAGE}:latest${SUFFIX}"
           elif [[ "$GITHUB_REF" == refs/pull/* ]]; then
             BRANCH="${GITHUB_HEAD_REF//\//-}"
+            BRANCH="${BRANCH//[^a-zA-Z0-9._-]/-}"
             TAGS="${FULL_IMAGE}:${BRANCH}${SUFFIX}"
           elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
             BRANCH="${GITHUB_REF#refs/heads/}"
             BRANCH="${BRANCH//\//-}"
+            BRANCH="${BRANCH//[^a-zA-Z0-9._-]/-}"
             TAGS="${FULL_IMAGE}:${BRANCH}${SUFFIX}"
           else
             SHA="${GITHUB_SHA::8}"
