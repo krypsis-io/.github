@@ -1,3 +1,10 @@
+## [1.9.1](https://github.com/krypsis-io/.github/compare/v1.9.0...v1.9.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* **container-build:** sanitize invalid chars in branch-derived image tags ([#62](https://github.com/krypsis-io/.github/issues/62)) ([d0ddda2](https://github.com/krypsis-io/.github/commit/d0ddda2a8724b60f821fbc7f3f5d9d6a669daabe))
+
 # [1.9.0](https://github.com/krypsis-io/.github/compare/v1.8.3...v1.9.0) (2026-04-14)
 
 
