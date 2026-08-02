@@ -9,6 +9,7 @@ All actions are SHA-pinned. Shell injection mitigations applied (env vars instea
 | Workflow | Description | Key Inputs |
 |----------|-------------|------------|
 | `release.yml` | Semantic-release with SBOM generation | `node-version`, `generate-sbom` |
+| `release-please.yml` | release-please with a reviewable Release PR and pre-1.0 bump control | `release-type`, `bump-minor-pre-major`, `generate-sbom` |
 | `goreleaser.yml` | GoReleaser binary builds on release | `go-version-file` |
 | `container-build.yml` | Buildah multi-arch container build, push & cosign signing | `dockerfile`, `platforms`, `dockerhub-image` |
 | `cleanup-container.yml` | Delete branch-tagged container images on branch deletion | `image-name`, `registry` |
@@ -66,6 +67,47 @@ jobs:
 ```
 
 Runs semantic-release to determine version bumps from conventional commits, generates SBOM via Trivy, and creates a GitHub release. App credentials are optional — falls back to `GITHUB_TOKEN`.
+
+### Release (release-please)
+
+An alternative to `release.yml`. Both are supported; pick one per repo.
+
+```yaml
+# .github/workflows/release.yml
+name: Release
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+jobs:
+  release:
+    uses: krypsis-io/.github/.github/workflows/release-please.yml@main
+    with:
+      release-type: go
+    secrets:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+```
+
+Releases are two-phase. A push to the target branch opens or updates a **Release PR** whose title carries the pending version and whose body is the pending changelog. Nothing is tagged until you merge it, so the version is reviewable before it exists.
+
+Choose this over `release.yml` when either matters:
+
+- **The version needs a review gate.** semantic-release tags on merge to `main`, so a `BREAKING CHANGE:` footer buried in a squashed PR body bumps the major with no chance to catch it.
+- **The repo is pre-1.0 and should stay there.** `bump-minor-pre-major` (default `true`) maps a breaking change onto a minor bump while the version is `0.x`. semantic-release has no equivalent and will promote `0.x` straight to `1.0.0`.
+
+Outputs match `release.yml` (`new-release-published`, `new-release-version`), so downstream jobs like `container-build.yml` need no changes — they just fire on the run that merges the Release PR rather than on the feature merge. Two extra outputs are available: `new-release-tag` and `release-pr-created`.
+
+#### Configuration
+
+release-please reads `release-please-config.json` and `.release-please-manifest.json` **from the branch over the GitHub API**, not from the workflow's checkout, so both must be committed. On first run this workflow writes them for you from the org defaults, seeding the manifest from the repo's newest `v*` tag so an existing version line continues rather than restarting at `0.0.0`. After that the repo owns both files and may override any key; the `with:` inputs only ever affect bootstrap. Set `bootstrap-config: false` to require the repo to supply them itself.
+
+Note that `release-type` is passed to bootstrap only and is deliberately **not** forwarded to the action — supplying it there would switch release-please to `Manifest.fromConfig()`, which ignores the committed config file entirely, and `bump-minor-pre-major` exists nowhere but that file.
+
+App credentials are effectively required here, unlike `release.yml`: the default `GITHUB_TOKEN` cannot trigger downstream workflows when the Release PR merges.
 
 ### GoReleaser (Go projects)
 
@@ -291,6 +333,7 @@ Workflows that require public repo features are automatically gated:
 |----------|--------------------------|
 | `dependency-review.yml` | Skipped |
 | `release.yml` (SBOM step) | Skipped |
+| `release-please.yml` (SBOM step) | Skipped |
 | `scorecard.yml` | Skipped |
 | `release-self.yml` | Skipped (only runs in `krypsis-io/.github`) |
 

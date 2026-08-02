@@ -1,0 +1,231 @@
+name: Release Please
+
+# Reusable release workflow built on release-please.
+#
+# Differs from release.yml (semantic-release) in two ways that matter:
+#
+#   1. Releases are two-phase. A push to the target branch opens or updates a
+#      "Release PR" that shows the pending version and changelog. Nothing is
+#      tagged until that PR is merged. This gives a review gate on the version
+#      itself, which semantic-release does not.
+#
+#   2. Pre-1.0 repos stay pre-1.0. `bump-minor-pre-major` maps a breaking
+#      change onto a minor bump while the version is still 0.x, instead of
+#      jumping to 1.0.0. semantic-release has no equivalent.
+#
+# The output contract (new-release-published / new-release-version) is kept
+# identical to release.yml so downstream jobs such as container-build.yml can
+# be repointed here without changes.
+
+on:
+  workflow_call:
+    inputs:
+      release-type:
+        description: >-
+          release-please release type used when bootstrapping a config file
+          (simple, node, go, python, ruby, terraform-module, ...). Ignored once
+          the repo has its own release-please-config.json.
+        type: string
+        default: "simple"
+      bump-minor-pre-major:
+        description: >-
+          While the version is 0.x, treat a breaking change as a minor bump
+          rather than promoting to 1.0.0. Bootstrap default only.
+        type: boolean
+        default: true
+      bump-patch-for-minor-pre-major:
+        description: >-
+          While the version is 0.x, treat a feature as a patch bump rather than
+          a minor bump. Bootstrap default only.
+        type: boolean
+        default: false
+      changelog-path:
+        description: "Changelog file managed by release-please. Bootstrap default only."
+        type: string
+        default: "CHANGELOG.md"
+      target-branch:
+        description: "Branch to release from. Defaults to the repository default branch."
+        type: string
+        default: ""
+      bootstrap-config:
+        description: >-
+          On first run, commit a release-please-config.json and a
+          .release-please-manifest.json seeded from the latest git tag. Set
+          false to require the repo to supply both files itself.
+        type: boolean
+        default: true
+      generate-sbom:
+        description: "Submit an SBOM to the dependency graph when a release is cut"
+        type: boolean
+        default: true
+    secrets:
+      APP_ID:
+        required: false
+        description: >-
+          GitHub App ID. Required in practice: the default GITHUB_TOKEN cannot
+          trigger downstream workflows from the Release PR merge, and cannot
+          open a PR that other workflows will run against.
+      APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key"
+    outputs:
+      new-release-published:
+        description: "Whether a release was tagged by this run (Release PR was merged)"
+        value: ${{ jobs.release.outputs.new-release-published }}
+      new-release-version:
+        description: "The released version, without the v prefix"
+        value: ${{ jobs.release.outputs.new-release-version }}
+      new-release-tag:
+        description: "The released tag, including the v prefix"
+        value: ${{ jobs.release.outputs.new-release-tag }}
+      release-pr-created:
+        description: "Whether this run opened or updated a pending Release PR"
+        value: ${{ jobs.release.outputs.release-pr-created }}
+
+jobs:
+  release:
+    name: Release Please
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new-release-published: ${{ steps.release.outputs.releases_created }}
+      new-release-version: ${{ steps.version.outputs.version }}
+      new-release-tag: ${{ steps.release.outputs.tag_name }}
+      release-pr-created: ${{ steps.release.outputs.prs_created }}
+    steps:
+      - name: Check for GitHub App credentials
+        id: app-check
+        env:
+          HAS_APP_ID: ${{ secrets.APP_ID }}
+          HAS_APP_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "$HAS_APP_ID" ] && [ -n "$HAS_APP_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate GitHub App token
+        id: app-token
+        if: steps.app-check.outputs.available == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.target-branch || github.event.repository.default_branch }}
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      # release-please reads its config and manifest from the branch over the
+      # GitHub API, never from this checkout, so the files have to actually be
+      # committed. Bootstrapping them here lets a repo adopt the workflow with
+      # no files of its own and still inherit the org defaults above; once
+      # committed the repo owns them outright and may edit any key.
+      - name: Bootstrap release-please config
+        if: inputs.bootstrap-config
+        env:
+          RELEASE_TYPE: ${{ inputs.release-type }}
+          BUMP_MINOR_PRE_MAJOR: ${{ inputs.bump-minor-pre-major }}
+          BUMP_PATCH_FOR_MINOR_PRE_MAJOR: ${{ inputs.bump-patch-for-minor-pre-major }}
+          CHANGELOG_PATH: ${{ inputs.changelog-path }}
+          TARGET_BRANCH: ${{ inputs.target-branch || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          CONFIG="release-please-config.json"
+          MANIFEST=".release-please-manifest.json"
+
+          if [ -f "$CONFIG" ] && [ -f "$MANIFEST" ]; then
+            echo "Both files present; repo owns its release-please config."
+            exit 0
+          fi
+
+          if [ ! -f "$CONFIG" ]; then
+            echo "Writing $CONFIG from org defaults."
+            jq -n \
+              --arg rt "$RELEASE_TYPE" \
+              --arg cp "$CHANGELOG_PATH" \
+              --argjson bmpm "$BUMP_MINOR_PRE_MAJOR" \
+              --argjson bpfmpm "$BUMP_PATCH_FOR_MINOR_PRE_MAJOR" \
+              '{
+                 "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+                 "bump-minor-pre-major": $bmpm,
+                 "bump-patch-for-minor-pre-major": $bpfmpm,
+                 "packages": { ".": { "release-type": $rt, "changelog-path": $cp } }
+               }' > "$CONFIG"
+          fi
+
+          if [ ! -f "$MANIFEST" ]; then
+            # Seed from the newest semver tag so an existing repo continues its
+            # version line instead of restarting at 0.0.0.
+            LAST_TAG="$(git tag -l 'v[0-9]*' | sort -V | tail -n1)"
+            SEED="${LAST_TAG#v}"
+            SEED="${SEED:-0.0.0}"
+            echo "Writing $MANIFEST seeded at $SEED (from tag '${LAST_TAG:-none}')."
+            jq -n --arg v "$SEED" '{".": $v}' > "$MANIFEST"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$CONFIG" "$MANIFEST"
+          git commit -m "chore(release): bootstrap release-please config [skip ci]"
+          git push origin "HEAD:$TARGET_BRANCH"
+
+      # release-type is deliberately NOT passed. Supplying it switches the
+      # action to Manifest.fromConfig(), which ignores the committed config
+      # file entirely -- and bump-minor-pre-major exists only in that file.
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ inputs.target-branch || github.event.repository.default_branch }}
+
+      # `version` is only set when a release is cut; derive it from the tag so
+      # the output is dependable even if the action stops emitting it.
+      - name: Resolve released version
+        id: version
+        env:
+          RAW_VERSION: ${{ steps.release.outputs.version }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${RAW_VERSION:-${TAG_NAME#v}}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Submit SBOM to dependency graph
+        if: >-
+          inputs.generate-sbom
+          && steps.release.outputs.releases_created == 'true'
+          && github.event.repository.visibility == 'public'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: github
+          output: dependency-results.sbom.json
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        env:
+          RELEASED: ${{ steps.release.outputs.releases_created }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          PR_CREATED: ${{ steps.release.outputs.prs_created }}
+        run: |
+          {
+            if [ "$RELEASED" = "true" ]; then
+              echo "Released **$TAG**."
+            elif [ "$PR_CREATED" = "true" ]; then
+              echo "Release PR is open and up to date. Merge it to cut the release."
+            else
+              echo "No releasable changes since the last release."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
