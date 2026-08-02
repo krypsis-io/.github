@@ -107,7 +107,100 @@ release-please reads `release-please-config.json` and `.release-please-manifest.
 
 Note that `release-type` is passed to bootstrap only and is deliberately **not** forwarded to the action — supplying it there would switch release-please to `Manifest.fromConfig()`, which ignores the committed config file entirely, and `bump-minor-pre-major` exists nowhere but that file.
 
-App credentials are effectively required here, unlike `release.yml`: the default `GITHUB_TOKEN` cannot trigger downstream workflows when the Release PR merges.
+#### GitHub App permissions
+
+App credentials are effectively required here, unlike `release.yml`: the default `GITHUB_TOKEN` cannot trigger downstream workflows when the Release PR merges, so a `release: published` consumer such as `goreleaser.yml` would never fire.
+
+The App needs more than `release.yml` did. semantic-release only ever pushed commits and tags, so a `Contents`-only App was sufficient; release-please additionally opens and labels a PR:
+
+| App permission | Why |
+|----------------|-----|
+| `Contents: Read and write` | Push the release branch, create tags and releases, commit the bootstrap files |
+| `Pull requests: Read and write` | Open and update the Release PR |
+| `Issues: Read and write` | Apply the `autorelease: pending` / `autorelease: tagged` labels, which go through the issues API |
+
+Granting `Contents` alone fails partway through, after the release branch already exists:
+
+```
+✔ Successfully updated reference release-please--branches--main to <sha>
+##[error]release-please failed: Resource not accessible by integration
+         https://docs.github.com/rest/pulls/pulls#create-a-pull-request
+```
+
+Grant the permissions at `https://github.com/settings/apps/<app-slug>/permissions`, then approve the pending permission request on each installation at `https://github.com/settings/installations` — the grant does not take effect until the installation accepts it.
+
+The job-level `permissions:` block in the caller does not help here. When the App token is present it supersedes `GITHUB_TOKEN`, and the App's own permissions govern.
+
+#### Changelog structure
+
+New entries are inserted by matching this regex against the existing file:
+
+```js
+const DEFAULT_VERSION_HEADER_REGEX = '\n###? v?[0-9[]';
+```
+
+Note the leading `\n`. **A version heading on the very first line of the file has no newline before it and will not match**, so the new entry is inserted before the *second* heading instead of at the top — silently, and only visibly wrong once you have two entries.
+
+A `CHANGELOG.md` must therefore start with a title line. release-please writes `# Changelog` when it creates the file itself; keep it:
+
+```markdown
+# Changelog
+
+## [0.4.0](...) (2026-08-02)
+...
+```
+
+This matters when migrating a repo off `release.yml`. semantic-release writes its newest entry at line 1 with no title, and formats minor/major entries as `#` rather than `##`. Before the first release-please run, prepend `# Changelog` and normalise any `# [x.y.z]` headings to `## [x.y.z]` — the regex only matches `##` or `###`.
+
+Sections come from `changelog-sections`. Types default to hidden unless listed with `"hidden": false`, and **un-hiding a type also makes it release-triggering** — with the config below, a `ci:`-only change cuts a patch release, which is not the default behaviour.
+
+#### Common config overrides
+
+Everything below is a key in the repo's `release-please-config.json`. Root-level keys apply to all packages; per-package keys go under `packages["."]`.
+
+| Key | Level | Effect |
+|-----|-------|--------|
+| `bump-minor-pre-major` | root | While `0.x`, a breaking change bumps minor instead of promoting to `1.0.0`. Org default `true`. |
+| `bump-patch-for-minor-pre-major` | root | While `0.x`, a `feat` bumps patch instead of minor. Org default `false`. |
+| `pull-request-title-pattern` | root | Release PR title. Default `chore(${scope}): release ${version}`. |
+| `changelog-sections` | root | Section names, ordering, and which commit types appear at all. |
+| `release-as` | package | Force an exact next version, ignoring what the commits imply. |
+| `extra-files` | package | Stamp the version into arbitrary files. |
+| `changelog-path` | package | Defaults to `CHANGELOG.md`. |
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "ci", "section": "CI/CD", "hidden": false },
+    { "type": "docs", "section": "Documentation", "hidden": false },
+    { "type": "chore", "section": "Chores", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [{ "type": "generic", "path": "main.go" }]
+    }
+  }
+}
+```
+
+`extra-files` with the `generic` updater rewrites any line carrying an `x-release-please-version` annotation, which covers the usual Go and shell cases:
+
+```go
+var version = "0.4.0" // x-release-please-version
+```
+
+**`release-as` is sticky.** It forces that exact version on *every* subsequent run, including after that version is already tagged — you get a fresh Release PR proposing a version that exists. Remove the key once the forced release is cut; the next run then recovers to a computed version on its own.
+
+Pushing more commits while a Release PR is open **updates that PR in place** rather than opening another, so the open PR always reflects the full set of unreleased changes.
 
 ### GoReleaser (Go projects)
 
