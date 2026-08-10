@@ -224,6 +224,28 @@ There is also a `versioning` key, settable at the root or under a package (the p
 
 Note the config key is `versioning`, not `versioning-strategy` — the latter is the CLI flag name and is silently ignored in `release-please-config.json`.
 
+**Commit types are not a fixed vocabulary.** `filterCommits` matches `commit.type` as a plain string against the types in `changelog-sections`, and your `changelog-sections` replaces the built-in list rather than extending it. So a type that release-please has never heard of works: give it a `section` and `hidden: false` and it gets its own changelog heading and triggers a patch release. Verified with a `deps:` type — absent from `DEFAULT_CHANGELOG_SECTIONS` — which rendered under `### Dependencies` and took `0.10.2` to `0.10.3`.
+
+This is the clean way to keep dependency bumps out of `Bug Fixes`. Point Renovate at a dedicated type rather than folding it into `fix`:
+
+```jsonc
+// renovate.json — production deps get their own type, dev deps stay silent
+{
+  "packageRules": [
+    { "matchDepTypes": ["dependencies"],
+      "semanticCommitType": "deps", "semanticCommitScope": null },
+    { "matchDepTypes": ["devDependencies"], "semanticCommitType": "chore" }
+  ]
+}
+```
+
+```jsonc
+// release-please-config.json
+{ "type": "deps", "section": "Dependencies", "hidden": false }
+```
+
+Keep `chore` hidden. Type matching ignores scope, so un-hiding `chore` to catch `chore(deps)` also catches every other chore in the repo — automated schema dumps and housekeeping commits included.
+
 **The header and footer are not templated.** `${version}` is substituted in `pull-request-title-pattern` but not in `pull-request-header` or `pull-request-footer`, which are emitted verbatim (`PullRequestBody.toString`) — put a literal `${version}` in the header and that is exactly what renders. The version is already visible in the PR title and in the changelog heading inside the body. Both also fall back to the upstream default on any falsy value (`options?.header || DEFAULT_HEADER`), so `""` restores the robot text rather than suppressing it — verified against `workflow-test`, where an empty header rendered `:robot: I have created a release *beep* *boop*`. Use a short string instead.
 
 **`release-as` is sticky.** It forces that exact version on *every* subsequent run, including after that version is already tagged — you get a fresh Release PR proposing a version that exists. Remove the key once the forced release is cut; the next run then recovers to a computed version on its own.
