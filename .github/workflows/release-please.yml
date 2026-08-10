@@ -115,12 +115,24 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # Narrow the token to what this workflow actually uses, so an App that
+          # happens to hold broader permissions does not hand them to this job.
+          # Requesting a permission the App lacks fails token minting outright,
+          # which surfaces a misconfigured App here rather than midway through
+          # release-please. See the permission table in the README.
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
 
+      # `token` is still needed to clone a private repo, but persisting it into
+      # .git/config would leave a writable credential lying around for every
+      # later step. The one step that pushes authenticates explicitly instead.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ inputs.target-branch || github.event.repository.default_branch }}
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       # release-please reads its config and manifest from the branch over the
       # GitHub API, never from this checkout, so the files have to actually be
@@ -135,6 +147,7 @@ jobs:
           BUMP_PATCH_FOR_MINOR_PRE_MAJOR: ${{ inputs.bump-patch-for-minor-pre-major }}
           CHANGELOG_PATH: ${{ inputs.changelog-path }}
           TARGET_BRANCH: ${{ inputs.target-branch || github.event.repository.default_branch }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -157,6 +170,8 @@ jobs:
                  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
                  "bump-minor-pre-major": $bmpm,
                  "bump-patch-for-minor-pre-major": $bpfmpm,
+                 "pull-request-title-pattern": "chore: release ${version}",
+                 "pull-request-header": "Release notes below. Merge this PR to tag the release and publish it.",
                  "packages": { ".": { "release-type": $rt, "changelog-path": $cp } }
                }' > "$CONFIG"
           fi
@@ -175,7 +190,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$CONFIG" "$MANIFEST"
           git commit -m "chore(release): bootstrap release-please config [skip ci]"
-          git push origin "HEAD:$TARGET_BRANCH"
+
+          # Checkout ran with persist-credentials: false, so authenticate this
+          # one push explicitly. The token is registered as a masked secret, so
+          # it stays redacted even if git echoes the remote URL on failure.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:$TARGET_BRANCH"
 
       # release-type is deliberately NOT passed. Supplying it switches the
       # action to Manifest.fromConfig(), which ignores the committed config

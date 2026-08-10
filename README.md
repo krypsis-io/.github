@@ -121,7 +121,7 @@ The App needs more than `release.yml` did. semantic-release only ever pushed com
 
 Granting `Contents` alone fails partway through, after the release branch already exists:
 
-```
+```text
 ✔ Successfully updated reference release-please--branches--main to <sha>
 ##[error]release-please failed: Resource not accessible by integration
          https://docs.github.com/rest/pulls/pulls#create-a-pull-request
@@ -130,6 +130,10 @@ Granting `Contents` alone fails partway through, after the release branch alread
 Grant the permissions at `https://github.com/settings/apps/<app-slug>/permissions`, then approve the pending permission request on each installation at `https://github.com/settings/installations` — the grant does not take effect until the installation accepts it.
 
 The job-level `permissions:` block in the caller does not help here. When the App token is present it supersedes `GITHUB_TOKEN`, and the App's own permissions govern.
+
+The workflow mints the token with `permission-contents`, `permission-issues`, and `permission-pull-requests` set to `write` and nothing else, so an App that holds broader permissions for other workflows does not pass them to this job. The trade-off is that requesting a permission the App lacks fails token minting immediately — which is the better failure, since it names the missing permission up front instead of surfacing as `Resource not accessible by integration` after the release branch already exists.
+
+The checkout runs with `persist-credentials: false`. The bootstrap step, the only one that pushes, authenticates that push on its own; nothing else in the job needs a git credential, since release-please works entirely over the API.
 
 #### Changelog structure
 
@@ -162,7 +166,9 @@ Everything below is a key in the repo's `release-please-config.json`. Root-level
 |-----|-------|--------|
 | `bump-minor-pre-major` | root | While `0.x`, a breaking change bumps minor instead of promoting to `1.0.0`. Org default `true`. |
 | `bump-patch-for-minor-pre-major` | root | While `0.x`, a `feat` bumps patch instead of minor. Org default `false`. |
-| `pull-request-title-pattern` | root | Release PR title. Default `chore(${scope}): release ${version}`. |
+| `pull-request-title-pattern` | root | Release PR title. Org default `chore: release ${version}`; upstream default is `chore(${scope}): release ${version}`. |
+| `pull-request-header` | root | First line of the Release PR body. Org default replaces upstream's `:robot: I have created a release *beep* *boop*`. |
+| `pull-request-footer` | root | Last line of the body. Left at the upstream "generated with Release Please" credit. |
 | `changelog-sections` | root | Section names, ordering, and which commit types appear at all. |
 | `release-as` | package | Force an exact next version, ignoring what the commits imply. |
 | `extra-files` | package | Stamp the version into arbitrary files. |
@@ -174,6 +180,7 @@ Everything below is a key in the repo's `release-please-config.json`. Root-level
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
   "pull-request-title-pattern": "chore: release ${version}",
+  "pull-request-header": "Release notes below. Merge this PR to tag the release and publish it.",
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
@@ -197,6 +204,8 @@ Everything below is a key in the repo's `release-please-config.json`. Root-level
 ```go
 var version = "0.4.0" // x-release-please-version
 ```
+
+**The header and footer are not templated.** `${version}` is substituted in `pull-request-title-pattern` but not in `pull-request-header` or `pull-request-footer`, which are emitted verbatim (`PullRequestBody.toString`) — put a literal `${version}` in the header and that is exactly what renders. The version is already visible in the PR title and in the changelog heading inside the body. Note also that both fall back to the upstream default on any falsy value (`options?.header || DEFAULT_HEADER`), so `""` restores the robot text rather than suppressing it; use a short string instead.
 
 **`release-as` is sticky.** It forces that exact version on *every* subsequent run, including after that version is already tagged — you get a fresh Release PR proposing a version that exists. Remove the key once the forced release is cut; the next run then recovers to a computed version on its own.
 
