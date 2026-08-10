@@ -220,7 +220,9 @@ What *is* configurable is whether a type reaches the strategy at all, via `hidde
 
 This cuts both ways — un-hiding a type purely to get it into the changelog also makes it release-triggering, which is rarely what you meant. Verified: with `docs` un-hidden, a lone `docs:` commit took `0.10.1` to `0.10.2`.
 
-There is also a per-package `versioning-strategy` key (`default`, `always-bump-patch`, `always-bump-minor`, `always-bump-major`, `service-pack`, `prerelease`), but it applies to the whole package rather than per type, and it is absent from the published JSON schema, so editors will not validate it.
+There is also a `versioning` key, settable at the root or under a package (the package value wins, falling back to the root). It selects the whole strategy rather than mapping individual types: `default`, `always-bump-patch`, `always-bump-minor`, `always-bump-major`, `service-pack`, `prerelease`. The schema types it as a bare string with no enum, so an editor will accept the key but will not catch a misspelled value.
+
+Note the config key is `versioning`, not `versioning-strategy` — the latter is the CLI flag name and is silently ignored in `release-please-config.json`.
 
 **The header and footer are not templated.** `${version}` is substituted in `pull-request-title-pattern` but not in `pull-request-header` or `pull-request-footer`, which are emitted verbatim (`PullRequestBody.toString`) — put a literal `${version}` in the header and that is exactly what renders. The version is already visible in the PR title and in the changelog heading inside the body. Both also fall back to the upstream default on any falsy value (`options?.header || DEFAULT_HEADER`), so `""` restores the robot text rather than suppressing it — verified against `workflow-test`, where an empty header rendered `:robot: I have created a release *beep* *boop*`. Use a short string instead.
 
