@@ -1,21 +1,7 @@
 name: Release Please
 
-# Reusable release workflow built on release-please.
-#
-# Differs from release.yml (semantic-release) in two ways that matter:
-#
-#   1. Releases are two-phase. A push to the target branch opens or updates a
-#      "Release PR" that shows the pending version and changelog. Nothing is
-#      tagged until that PR is merged. This gives a review gate on the version
-#      itself, which semantic-release does not.
-#
-#   2. Pre-1.0 repos stay pre-1.0. `bump-minor-pre-major` maps a breaking
-#      change onto a minor bump while the version is still 0.x, instead of
-#      jumping to 1.0.0. semantic-release has no equivalent.
-#
-# The output contract (new-release-published / new-release-version) is kept
-# identical to release.yml so downstream jobs such as container-build.yml can
-# be repointed here without changes.
+# Outputs match release.yml so downstream jobs can be repointed unchanged.
+# Usage and config: see "Release (release-please)" in the README.
 
 on:
   workflow_call:
@@ -115,18 +101,10 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          # Narrow the token to what this workflow actually uses, so an App that
-          # happens to hold broader permissions does not hand them to this job.
-          # Requesting a permission the App lacks fails token minting outright,
-          # which surfaces a misconfigured App here rather than midway through
-          # release-please. See the permission table in the README.
           permission-contents: write
           permission-issues: write
           permission-pull-requests: write
 
-      # `token` is still needed to clone a private repo, but persisting it into
-      # .git/config would leave a writable credential lying around for every
-      # later step. The one step that pushes authenticates explicitly instead.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -134,11 +112,8 @@ jobs:
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
-      # release-please reads its config and manifest from the branch over the
-      # GitHub API, never from this checkout, so the files have to actually be
-      # committed. Bootstrapping them here lets a repo adopt the workflow with
-      # no files of its own and still inherit the org defaults above; once
-      # committed the repo owns them outright and may edit any key.
+      # release-please reads config and manifest from the branch over the API,
+      # never from this checkout, so they have to be committed to take effect.
       - name: Bootstrap release-please config
         if: inputs.bootstrap-config
         env:
@@ -177,8 +152,6 @@ jobs:
           fi
 
           if [ ! -f "$MANIFEST" ]; then
-            # Seed from the newest semver tag so an existing repo continues its
-            # version line instead of restarting at 0.0.0.
             LAST_TAG="$(git tag -l 'v[0-9]*' | sort -V | tail -n1)"
             SEED="${LAST_TAG#v}"
             SEED="${SEED:-0.0.0}"
@@ -190,16 +163,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$CONFIG" "$MANIFEST"
           git commit -m "chore(release): bootstrap release-please config [skip ci]"
-
-          # Checkout ran with persist-credentials: false, so authenticate this
-          # one push explicitly. The token is registered as a masked secret, so
-          # it stays redacted even if git echoes the remote URL on failure.
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "HEAD:$TARGET_BRANCH"
 
-      # release-type is deliberately NOT passed. Supplying it switches the
-      # action to Manifest.fromConfig(), which ignores the committed config
-      # file entirely -- and bump-minor-pre-major exists only in that file.
+      # Do not add release-type here. It switches the action to
+      # Manifest.fromConfig(), which ignores the committed config file --
+      # and bump-minor-pre-major exists only in that file.
       - name: Release Please
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
@@ -209,8 +178,6 @@ jobs:
           manifest-file: .release-please-manifest.json
           target-branch: ${{ inputs.target-branch || github.event.repository.default_branch }}
 
-      # `version` is only set when a release is cut; derive it from the tag so
-      # the output is dependable even if the action stops emitting it.
       - name: Resolve released version
         id: version
         env:
