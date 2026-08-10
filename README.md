@@ -116,8 +116,9 @@ The App needs more than `release.yml` did. semantic-release only ever pushed com
 | App permission | Why |
 |----------------|-----|
 | `Contents: Read and write` | Push the release branch, create tags and releases, commit the bootstrap files |
-| `Pull requests: Read and write` | Open and update the Release PR |
-| `Issues: Read and write` | Apply the `autorelease: pending` / `autorelease: tagged` labels, which go through the issues API |
+| `Pull requests: Read and write` | Open and update the Release PR, and apply the `autorelease: pending` / `autorelease: tagged` labels |
+
+`Issues` is **not** required. Labelling goes through the issues endpoint, but GitHub resolves the required fine-grained permission by target type, so labelling a pull request needs `Pull requests: write`. Requesting `issues` from an installation that was never granted it fails token minting with a `422`.
 
 Granting `Contents` alone fails partway through, after the release branch already exists:
 
@@ -131,7 +132,7 @@ Grant the permissions at `https://github.com/settings/apps/<app-slug>/permission
 
 The job-level `permissions:` block in the caller does not help here. When the App token is present it supersedes `GITHUB_TOKEN`, and the App's own permissions govern.
 
-The workflow mints the token with `permission-contents`, `permission-issues`, and `permission-pull-requests` set to `write` and nothing else, so an App that holds broader permissions for other workflows does not pass them to this job. The trade-off is that requesting a permission the App lacks fails token minting immediately — which is the better failure, since it names the missing permission up front instead of surfacing as `Resource not accessible by integration` after the release branch already exists.
+The workflow mints the token with `permission-contents` and `permission-pull-requests` set to `write` and nothing else, so an App that holds broader permissions for other workflows does not pass them to this job. The trade-off is that requesting a permission the installation lacks fails token minting immediately with `The permissions requested are not granted to this installation`. That is the better failure — it happens before anything is written, rather than surfacing as `Resource not accessible by integration` once the release branch already exists.
 
 The checkout runs with `persist-credentials: false`. The bootstrap step, the only one that pushes, authenticates that push on its own; nothing else in the job needs a git credential, since release-please works entirely over the API.
 
@@ -205,7 +206,23 @@ Everything below is a key in the repo's `release-please-config.json`. Root-level
 var version = "0.4.0" // x-release-please-version
 ```
 
-**The header and footer are not templated.** `${version}` is substituted in `pull-request-title-pattern` but not in `pull-request-header` or `pull-request-footer`, which are emitted verbatim (`PullRequestBody.toString`) — put a literal `${version}` in the header and that is exactly what renders. The version is already visible in the PR title and in the changelog heading inside the body. Note also that both fall back to the upstream default on any falsy value (`options?.header || DEFAULT_HEADER`), so `""` restores the robot text rather than suppressing it; use a short string instead.
+#### Which commit types cut a release, and at what level
+
+The bump level is fixed. `DefaultVersioningStrategy.determineReleaseType` special-cases only two things — a breaking change and `feat`/`feature` — and everything else that reaches it falls through to a patch:
+
+| Commit | Bump | Pre-1.0 override |
+|--------|------|------------------|
+| breaking change | major | minor, with `bump-minor-pre-major` |
+| `feat` / `feature` | minor | patch, with `bump-patch-for-minor-pre-major` |
+| any other visible type | patch | — |
+
+What *is* configurable is whether a type reaches the strategy at all, via `hidden` in `changelog-sections`. Un-hiding a type makes it release-triggering at patch level; hiding it means those commits never cut a release. So `docs` producing a patch bump is achievable, `docs` producing a minor bump is not.
+
+This cuts both ways — un-hiding a type purely to get it into the changelog also makes it release-triggering, which is rarely what you meant. Verified: with `docs` un-hidden, a lone `docs:` commit took `0.10.1` to `0.10.2`.
+
+There is also a per-package `versioning-strategy` key (`default`, `always-bump-patch`, `always-bump-minor`, `always-bump-major`, `service-pack`, `prerelease`), but it applies to the whole package rather than per type, and it is absent from the published JSON schema, so editors will not validate it.
+
+**The header and footer are not templated.** `${version}` is substituted in `pull-request-title-pattern` but not in `pull-request-header` or `pull-request-footer`, which are emitted verbatim (`PullRequestBody.toString`) — put a literal `${version}` in the header and that is exactly what renders. The version is already visible in the PR title and in the changelog heading inside the body. Both also fall back to the upstream default on any falsy value (`options?.header || DEFAULT_HEADER`), so `""` restores the robot text rather than suppressing it — verified against `workflow-test`, where an empty header rendered `:robot: I have created a release *beep* *boop*`. Use a short string instead.
 
 **`release-as` is sticky.** It forces that exact version on *every* subsequent run, including after that version is already tagged — you get a fresh Release PR proposing a version that exists. Remove the key once the forced release is cut; the next run then recovers to a computed version on its own.
 
