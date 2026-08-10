@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/krypsis-io/.github/compare/v1.9.1...v1.10.0) (2026-08-10)
+
+
+### Features
+
+* **release-please:** add release-please reusable workflow ([#80](https://github.com/krypsis-io/.github/issues/80)) ([5fc3c69](https://github.com/krypsis-io/.github/commit/5fc3c69af4e52f90ef066500628eaf438fd36d53))
+
 ## [1.9.1](https://github.com/krypsis-io/.github/compare/v1.9.0...v1.9.1) (2026-07-03)
 
 
