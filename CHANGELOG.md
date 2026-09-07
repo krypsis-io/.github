@@ -1,3 +1,10 @@
+## [1.10.1](https://github.com/krypsis-io/.github/compare/v1.10.0...v1.10.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **release:** pin semantic-release toolchain via lockfile with sha512 integrity ([#90](https://github.com/krypsis-io/.github/issues/90)) ([f0249a8](https://github.com/krypsis-io/.github/commit/f0249a8b345d005ce7b0d677e678bdf82cde645e)), closes [semantic-release/release-notes-generator#992](https://github.com/semantic-release/release-notes-generator/issues/992)
+
 # [1.10.0](https://github.com/krypsis-io/.github/compare/v1.9.1...v1.10.0) (2026-08-10)
 
 
