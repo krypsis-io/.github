@@ -80,8 +80,24 @@ jobs:
           output: dependency-results.sbom.json
           github-pat: ${{ secrets.GITHUB_TOKEN }}
 
+      # The semantic-release toolchain is pinned in semantic-release/package-lock.json in this
+      # repo (sha512 integrity per package, Renovate-managed). Check this repo out at the exact
+      # commit the caller's workflow resolved to, so the workflow and the lockfile always match.
+      # Runs after the SBOM step so the tooling's node_modules are not scanned as project deps.
+      - name: Checkout semantic-release toolchain
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: krypsis-io/.github
+          ref: ${{ github.job_workflow_sha }}
+          path: .semantic-release-tooling
+          sparse-checkout: semantic-release
+          sparse-checkout-cone-mode: true
+
       - name: Install semantic-release
-        run: npm install -g semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec conventional-changelog-conventionalcommits
+        working-directory: .semantic-release-tooling/semantic-release
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Get latest tag before release
         id: before
@@ -94,7 +110,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
-          npx semantic-release
+          semantic-release
           git fetch --tags
           NEW_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
           if [ "$NEW_TAG" != "${{ steps.before.outputs.tag }}" ]; then
