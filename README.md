@@ -62,7 +62,7 @@ jobs:
   release:
     uses: krypsis-io/.github/.github/workflows/release.yml@main
     secrets:
-      APP_ID: ${{ secrets.APP_ID }}
+      APP_CLIENT_ID: ${{ secrets.APP_CLIENT_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 ```
 
@@ -88,7 +88,7 @@ jobs:
     with:
       release-type: go
     secrets:
-      APP_ID: ${{ secrets.APP_ID }}
+      APP_CLIENT_ID: ${{ secrets.APP_CLIENT_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 ```
 
@@ -409,7 +409,7 @@ jobs:
 
 **GitHub App permissions required:**
 
-The app referenced by `APP_ID` / `APP_PRIVATE_KEY` must have these **repository permissions**:
+The app referenced by `APP_CLIENT_ID` / `APP_PRIVATE_KEY` must have these **repository permissions**:
 
 | Permission | Access | Why |
 |------------|--------|-----|
@@ -427,7 +427,7 @@ The `sync-upstream.yml` workflow automatically keeps private mirrors in sync wit
 
 - Skipped in the upstream repo (`krypsis-io/.github`) — only activates in mirrors
 - Uses `git reset --hard` and force push to ensure the mirror is an exact copy of upstream
-- Requires a GitHub App token (`APP_ID` and `APP_PRIVATE_KEY` secrets) with Contents and Workflows write permissions to push workflow file changes
+- Requires a GitHub App token (`APP_CLIENT_ID` and `APP_PRIVATE_KEY` secrets) with Contents and Workflows write permissions to push workflow file changes
 
 No configuration needed — it's included automatically when you mirror the repo.
 
@@ -461,7 +461,7 @@ jobs:
 
 The sync and Renovate workflows require a GitHub App installed on your org. At minimum it needs **Contents** and **Workflows** write permissions (sync), plus **Pull requests**, **Issues**, and **Checks** read permissions (Renovate). Add the app credentials as repo secrets:
 
-- `APP_ID` — the GitHub App's Client ID
+- `APP_CLIENT_ID` — the GitHub App's Client ID
 - `APP_PRIVATE_KEY` — the GitHub App's private key (`.pem` file contents)
 
 The included `sync-upstream.yml` workflow will keep the mirror up to date automatically (weekly on Mondays). You can also trigger it manually from the Actions tab.

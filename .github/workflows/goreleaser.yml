@@ -8,7 +8,7 @@ on:
         type: string
         default: "go.mod"
     secrets:
-      APP_ID:
+      APP_CLIENT_ID:
         required: false
         description: "GitHub App Client ID for generating a Homebrew tap token (optional)"
       APP_PRIVATE_KEY:
@@ -29,10 +29,10 @@ jobs:
       - name: Check for GitHub App credentials
         id: app-check
         env:
-          HAS_APP_ID: ${{ secrets.APP_ID }}
+          HAS_APP_CLIENT_ID: ${{ secrets.APP_CLIENT_ID }}
           HAS_APP_KEY: ${{ secrets.APP_PRIVATE_KEY }}
         run: |
-          if [ -n "$HAS_APP_ID" ] && [ -n "$HAS_APP_KEY" ]; then
+          if [ -n "$HAS_APP_CLIENT_ID" ] && [ -n "$HAS_APP_KEY" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -43,7 +43,7 @@ jobs:
         if: steps.app-check.outputs.available == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           repositories: homebrew-tap
 

@@ -14,5 +14,5 @@ jobs:
     if: github.repository == 'krypsis-io/.github'
     uses: ./.github/workflows/release.yml
     secrets:
-      APP_ID: ${{ secrets.APP_ID }}
+      APP_CLIENT_ID: ${{ secrets.APP_CLIENT_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
