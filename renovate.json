@@ -1,4 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>krypsis-io/renovate-config"]
+  "extends": ["github>krypsis-io/renovate-config"],
+  "packageRules": [
+    {
+      "description": "conventional-changelog-conventionalcommits v10 needs conventional-changelog-writer v9, which @semantic-release/release-notes-generator 14.x does not bundle (semantic-release/release-notes-generator#992). Lift once release-notes-generator 15 is stable.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["conventional-changelog-conventionalcommits"],
+      "allowedVersions": "<10",
+      "minimumReleaseAge": "7 days"
+    }
+  ]
 }
