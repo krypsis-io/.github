@@ -48,7 +48,7 @@ on:
       APP_ID:
         required: false
         description: >-
-          GitHub App ID. Required in practice: the default GITHUB_TOKEN cannot
+          GitHub App Client ID. Required in practice: the default GITHUB_TOKEN cannot
           trigger downstream workflows from the Release PR merge, and cannot
           open a PR that other workflows will run against.
       APP_PRIVATE_KEY:
@@ -99,7 +99,7 @@ jobs:
         if: steps.app-check.outputs.available == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write

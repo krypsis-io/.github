@@ -10,7 +10,7 @@ on:
     secrets:
       APP_ID:
         required: false
-        description: "GitHub App ID for generating a Homebrew tap token (optional)"
+        description: "GitHub App Client ID for generating a Homebrew tap token (optional)"
       APP_PRIVATE_KEY:
         required: false
         description: "GitHub App private key for generating a Homebrew tap token (optional)"
@@ -43,7 +43,7 @@ jobs:
         if: steps.app-check.outputs.available == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           repositories: homebrew-tap
 
