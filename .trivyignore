@@ -1,0 +1,5 @@
+# braces 3.0.3 (DoS via deeply nested brace patterns). No fixed release exists yet.
+# Only reached via @semantic-release/commit-analyzer -> micromatch in the release toolchain
+# (semantic-release/package-lock.json), where patterns come from our own release config,
+# not untrusted input. Remove once braces ships a fix; the entry expires so the scan fails again.
+CVE-2026-93687 exp:2027-01-15
