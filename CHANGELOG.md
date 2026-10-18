@@ -1,3 +1,10 @@
+## [1.10.2](https://github.com/krypsis-io/.github/compare/v1.10.1...v1.10.2) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** refresh semantic-release lockfile to clear Trivy findings ([70fc465](https://github.com/krypsis-io/.github/commit/70fc465cc80fce97533cd54de55e0e6e9bab4757))
+
 ## [1.10.1](https://github.com/krypsis-io/.github/compare/v1.10.0...v1.10.1) (2026-09-07)
 
 
