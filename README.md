@@ -15,7 +15,7 @@ All actions are SHA-pinned. Shell injection mitigations applied (env vars instea
 | `cleanup-container.yml` | Delete branch-tagged container images on branch deletion | `image-name`, `registry` |
 | `dependency-review.yml` | PR dependency change review | `fail-on-severity` |
 | `trivy.yml` | Filesystem vulnerability scan | `severity`, `scan-type` |
-| `semgrep.yml` | Static analysis with autofix and PR comments | `semgrep-config` |
+| `semgrep.yml` | Static analysis that reports findings in PR comments and does not change the branch | `semgrep-config` |
 | `scorecard.yml` | OpenSSF Scorecard analysis with SARIF upload | `publish-results` |
 | `cleanup-preview.yml` | Vercel preview deployment cleanup | `production-keep-count` |
 | `renovate.yml` | Self-hosted Renovate dependency updates | `dry-run`, `log-level` |
